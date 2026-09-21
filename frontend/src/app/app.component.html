@@ -1,0 +1,43 @@
+<div class="page">
+  <header class="header">
+    <div>
+      <p class="eyebrow">RAG + MCP scaffold</p>
+      <h1>{{ title }}</h1>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" [(ngModel)]="useRag" />
+      Use RAG
+    </label>
+  </header>
+
+  <main class="chat-panel">
+    <div #messageList class="messages" aria-live="polite">
+      @for (message of messages; track $index) {
+        <article class="bubble" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+          <span class="role">{{ message.role }}</span>
+          <p>{{ message.content }}</p>
+        </article>
+      }
+
+      @if (isSending) {
+        <p class="status">Thinking…</p>
+      }
+
+      @if (error) {
+        <p class="error">{{ error }}</p>
+      }
+    </div>
+
+    <form class="composer" (ngSubmit)="sendMessage()">
+      <input
+        type="text"
+        name="draft"
+        [(ngModel)]="draft"
+        placeholder="Ask something…"
+        autocomplete="off"
+        [disabled]="isSending"
+      />
+      <button type="submit" [disabled]="isSending || !draft.trim()">Send</button>
+    </form>
+  </main>
+</div>
