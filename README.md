@@ -5,6 +5,13 @@ Scaffold for the Coursera course
 
 Full-stack starter: **Angular** chat UI + **Node.js/Express (TypeScript)** backend with RAG and tool stubs. Deployable on **Vercel** (static FE + serverless API).
 
+## Live demo
+
+- App: https://agentic-ai-rag-mcp-chatbot.vercel.app/
+- Health: https://agentic-ai-rag-mcp-chatbot.vercel.app/api/health
+
+Production currently has `API_ACCESS_TOKEN` enabled. In the UI, enter Bearer token `demo-token`, click **Lưu token**, then chat (e.g. “6 Rõ là gì?”).
+
 ## Stack
 
 | Layer | Tech |
@@ -87,7 +94,9 @@ npm run dev:frontend
 | `API_ACCESS_TOKEN` | optional | If set, UI must send Bearer token |
 
 5. Deploy. Open the Vercel URL — FE and `/api/*` share the same origin (`apiBaseUrl` empty in production).
-6. Check `https://<app>.vercel.app/api/health`.
+6. Check health: `https://agentic-ai-rag-mcp-chatbot.vercel.app/api/health` (or your project URL).
+
+This repo’s production deployment: **https://agentic-ai-rag-mcp-chatbot.vercel.app/**
 
 Optional CLI:
 
