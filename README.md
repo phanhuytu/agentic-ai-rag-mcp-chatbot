@@ -82,15 +82,15 @@ npm run dev:frontend
 
 ## Current behavior
 
-- Gemini chat is live when `GEMINI_API_KEY` is set in `backend/.env` (or OpenAI via `LLM_PROVIDER=openai`).
-- RAG uses **embeddings + cosine similarity** over `backend/data/knowledge-base.md` (keyword fallback).
-- OKR tools (Coursera/MCP style): `GET/POST /api/okr/*` — validate draft, list/get playbook sections.
-- Product UI: intake form, local chat history, validate + export Markdown.
+- Gemini/OpenAI chat with **embedding RAG** over FPT OKR knowledge base.
+- **Agent tools (demo):** chat may auto-call `validate_okr_draft` / `get_okr_playbook_section`.
+- **Streaming:** `POST /api/chat/stream` (SSE) — UI shows status + chunked reply.
+- **Auth (optional):** set `API_ACCESS_TOKEN` in `backend/.env`; UI stores Bearer token in sessionStorage.
+- Product UI: intake form, validate, export Markdown, local history.
 
 See plan: `docs/superpowers/plans/2026-09-21-coursera-refactor-product.md`.
 
 ## Next course increments
 
-1. Wrap `tool-registry` as a real MCP server (stdio/SSE).
-2. Add agent loop that auto-calls OKR tools during chat.
-3. Streaming replies + richer session sync.
+1. Real MCP stdio server (local / separate host — not required for this Vercel-friendly demo).
+2. Token streaming from the LLM provider (current demo chunks the final answer).

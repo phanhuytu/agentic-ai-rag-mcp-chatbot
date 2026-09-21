@@ -9,4 +9,5 @@ export interface ChatApiResponse {
   reply: string;
   provider: string;
   ragContextUsed: boolean;
+  toolsUsed?: string[];
 }

@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChatMessage } from './models/chat-message';
+import { AuthService } from './services/auth.service';
 import { ChatService } from './services/chat.service';
 import { OkrService, OkrValidationResult } from './services/okr.service';
 
@@ -16,6 +17,7 @@ const STORAGE_KEY = 'fpt-okr-coach-messages';
 export class AppComponent implements OnInit {
   private readonly chatService = inject(ChatService);
   private readonly okrService = inject(OkrService);
+  private readonly authService = inject(AuthService);
 
   @ViewChild('messageList') private messageList?: ElementRef<HTMLDivElement>;
 
@@ -24,6 +26,8 @@ export class AppComponent implements OnInit {
   useRag = true;
   isSending = false;
   error = '';
+  statusText = '';
+  accessToken = '';
   validation: OkrValidationResult | null = null;
 
   intake = {
@@ -39,10 +43,12 @@ export class AppComponent implements OnInit {
   private readonly welcome: ChatMessage = {
     role: 'assistant',
     content:
-      'Xin chào! Điền form bên trái (vai trò / đơn vị / quý / OKR cấp trên) rồi bấm “Soạn OKR”, hoặc chat tự do để hỏi về 6 Rõ, Align, CFR.',
+      'Xin chào! Demo RAG + agent tools + streaming.\n\n' +
+      'Điền form rồi “Soạn OKR”, hoặc hỏi “6 Rõ là gì?”, “kiểm tra OKR …” để agent tự gọi tool.',
   };
 
   ngOnInit(): void {
+    this.accessToken = this.authService.getToken();
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -58,6 +64,12 @@ export class AppComponent implements OnInit {
     this.messages = [this.welcome];
   }
 
+  saveToken(): void {
+    this.authService.setToken(this.accessToken);
+    this.error = '';
+    this.statusText = this.accessToken.trim() ? 'Đã lưu access token (session).' : 'Đã xóa token.';
+  }
+
   generateFromIntake(): void {
     const prompt = this.buildIntakePrompt();
     if (!prompt) {
@@ -65,16 +77,17 @@ export class AppComponent implements OnInit {
       return;
     }
     this.draft = prompt;
-    this.sendMessage();
+    void this.sendMessage();
   }
 
-  sendMessage(): void {
+  async sendMessage(): Promise<void> {
     const text = this.draft.trim();
     if (!text || this.isSending) {
       return;
     }
 
     this.error = '';
+    this.statusText = '';
     this.validation = null;
     this.messages = [...this.messages, { role: 'user', content: text }];
     this.draft = '';
@@ -83,27 +96,56 @@ export class AppComponent implements OnInit {
     this.scrollToBottom();
 
     const history = this.messages.filter((message) => message.role !== 'system');
+    const assistantIndex = this.messages.length;
+    this.messages = [...this.messages, { role: 'assistant', content: '' }];
 
-    this.chatService.sendMessage(text, history.slice(0, -1), this.useRag).subscribe({
-      next: (response) => {
-        const suffix = response.ragContextUsed ? ' (RAG)' : '';
-        this.messages = [
-          ...this.messages,
-          {
-            role: 'assistant',
-            content: `${response.reply}\n\n— ${response.provider}${suffix}`,
-          },
-        ];
-        this.isSending = false;
-        this.persist();
-        this.scrollToBottom();
-      },
-      error: (err: unknown) => {
-        this.isSending = false;
-        this.error = this.formatChatError(err);
-        this.scrollToBottom();
-      },
-    });
+    try {
+      let provider = '';
+      let rag = false;
+      let tools: string[] = [];
+
+      await this.chatService.streamMessage(text, history.slice(0, -1), this.useRag, (event) => {
+        if (event.type === 'status') {
+          this.statusText = event.message;
+        } else if (event.type === 'tool') {
+          this.statusText = `tool ${event.name}: ${event.ok ? 'ok' : 'fail'}`;
+        } else if (event.type === 'delta') {
+          const current = this.messages[assistantIndex];
+          if (current) {
+            current.content += event.text;
+            this.messages = [...this.messages];
+            this.scrollToBottom();
+          }
+        } else if (event.type === 'done') {
+          provider = event.provider;
+          rag = event.ragContextUsed;
+          tools = event.toolsUsed ?? [];
+        } else if (event.type === 'error') {
+          throw new Error(event.detail);
+        }
+      });
+
+      const current = this.messages[assistantIndex];
+      if (current) {
+        const bits = [
+          provider || 'llm',
+          rag ? 'RAG' : null,
+          tools.length ? `tools:${tools.join(',')}` : null,
+        ].filter(Boolean);
+        current.content = `${current.content.trim()}\n\n— ${bits.join(' · ')}`;
+        this.messages = [...this.messages];
+      }
+
+      this.statusText = '';
+      this.persist();
+    } catch (err: unknown) {
+      this.messages = this.messages.slice(0, -1);
+      this.error = this.formatChatError(err);
+      this.persist();
+    } finally {
+      this.isSending = false;
+      this.scrollToBottom();
+    }
   }
 
   exportLastOkr(): void {

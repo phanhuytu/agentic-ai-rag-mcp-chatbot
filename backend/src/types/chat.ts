@@ -13,4 +13,5 @@ export type ChatResponseBody = {
   reply: string;
   provider: string;
   ragContextUsed: boolean;
+  toolsUsed?: string[];
 };

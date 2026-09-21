@@ -1,7 +1,7 @@
 <div class="page">
   <header class="header">
     <div>
-      <p class="eyebrow">RAG · Embedding · OKR FPT</p>
+      <p class="eyebrow">RAG · Agent tools · Streaming</p>
       <h1>{{ title }}</h1>
     </div>
     <label class="toggle">
@@ -12,6 +12,13 @@
 
   <div class="layout">
     <aside class="intake-panel">
+      <h2>Demo access token</h2>
+      <label>
+        Bearer token (chỉ cần khi backend bật API_ACCESS_TOKEN)
+        <input name="accessToken" [(ngModel)]="accessToken" placeholder="demo-token" autocomplete="off" />
+      </label>
+      <button type="button" (click)="saveToken()">Lưu token</button>
+
       <h2>Thông tin soạn OKR</h2>
       <label>
         Vai trò
@@ -63,7 +70,11 @@
         }
 
         @if (isSending) {
-          <p class="status">Đang soạn / truy xuất RAG… (lần đầu embedding có thể mất vài giây)</p>
+          <p class="status">{{ statusText || 'streaming…' }}</p>
+        }
+
+        @if (!isSending && statusText) {
+          <p class="status">{{ statusText }}</p>
         }
 
         @if (error) {
@@ -76,7 +87,7 @@
           type="text"
           name="draft"
           [(ngModel)]="draft"
-          placeholder="Hỏi thêm về 6 Rõ, Align, CFR…"
+          placeholder="VD: 6 Rõ là gì? / kiểm tra OKR …"
           autocomplete="off"
           [disabled]="isSending"
         />

@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import { requireAuth } from './http/auth.middleware.js';
 import { errorMiddleware } from './http/async-handler.js';
 import { chatRouter } from './routes/chat.routes.js';
 import { customersRouter } from './routes/customers.routes.js';
@@ -18,9 +19,13 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok' });
+    res.json({
+      status: 'ok',
+      authRequired: Boolean(process.env.API_ACCESS_TOKEN?.trim()),
+    });
   });
 
+  app.use('/api', requireAuth);
   app.use('/api/chat', chatRouter);
   app.use('/api/okr', okrRouter);
 
