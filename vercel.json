@@ -6,7 +6,7 @@
   "framework": null,
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{backend/data/**,backend/dist/**}",
+      "includeFiles": "{backend/data/**,backend/dist/**,backend/package.json}",
       "maxDuration": 60
     }
   },
