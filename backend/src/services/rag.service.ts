@@ -1,3 +1,4 @@
+import { access } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +7,6 @@ import { parseKnowledgeChunks, type KnowledgeChunk } from './knowledge-loader.js
 import { cosineSimilarity } from './similarity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const knowledgePath = path.resolve(__dirname, '../../data/knowledge-base.md');
 
 const TOP_K = Number(process.env.RAG_TOP_K ?? 4);
 const MIN_SCORE = Number(process.env.RAG_MIN_SCORE ?? 0.35);
@@ -22,6 +22,16 @@ type EmbeddingIndex = {
 
 let embeddingIndex: EmbeddingIndex | null = null;
 let indexPromise: Promise<EmbeddingIndex> | null = null;
+let resolvedKnowledgePath: string | null = null;
+
+function ragMode(): 'keyword' | 'embedding' {
+  const explicit = (process.env.RAG_MODE ?? '').toLowerCase();
+  if (explicit === 'keyword' || explicit === 'embedding') {
+    return explicit;
+  }
+  // Vercel serverless: keyword is safer against cold-start timeouts.
+  return process.env.VERCEL ? 'keyword' : 'embedding';
+}
 
 function tokenize(query: string): string[] {
   return query
@@ -48,7 +58,6 @@ function keywordFallback(chunks: KnowledgeChunk[], query: string): string {
     return ranked.join('\n\n---\n\n');
   }
 
-  // Default coaching sections when nothing matches.
   const defaults = [
     'Quy trình coaching để tạo OKR phù hợp',
     'Cách viết Objective tốt',
@@ -61,7 +70,32 @@ function keywordFallback(chunks: KnowledgeChunk[], query: string): string {
     .join('\n\n---\n\n');
 }
 
+async function resolveKnowledgePath(): Promise<string> {
+  if (resolvedKnowledgePath) {
+    return resolvedKnowledgePath;
+  }
+
+  const candidates = [
+    path.resolve(process.cwd(), 'backend/data/knowledge-base.md'),
+    path.resolve(process.cwd(), 'data/knowledge-base.md'),
+    path.resolve(__dirname, '../../data/knowledge-base.md'),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      resolvedKnowledgePath = candidate;
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+
+  throw new Error('knowledge-base.md not found (checked cwd/backend/data and package-relative paths).');
+}
+
 async function loadChunks(): Promise<KnowledgeChunk[]> {
+  const knowledgePath = await resolveKnowledgePath();
   const raw = await readFile(knowledgePath, 'utf8');
   return parseKnowledgeChunks(raw);
 }
@@ -101,10 +135,14 @@ async function ensureEmbeddingIndex(provider: LlmProvider): Promise<EmbeddingInd
 
 /**
  * Embedding RAG with cosine similarity ranking.
- * Falls back to keyword retrieval if embeddings fail.
+ * On Vercel defaults to keyword mode unless RAG_MODE=embedding.
  */
 export async function buildRagContext(query: string, provider: LlmProvider): Promise<string> {
   const chunks = await loadChunks();
+
+  if (ragMode() === 'keyword') {
+    return keywordFallback(chunks, query);
+  }
 
   try {
     if (!provider.generateEmbedding) {
@@ -134,13 +172,11 @@ export async function buildRagContext(query: string, provider: LlmProvider): Pro
   }
 }
 
-/** Test helper / MCP tool: list playbook section titles. */
 export async function listKnowledgeTitles(): Promise<string[]> {
   const chunks = await loadChunks();
   return chunks.map((chunk) => chunk.title);
 }
 
-/** Test helper / MCP tool: get one section by title (case-insensitive contains). */
 export async function getKnowledgeSectionByTitle(titleQuery: string): Promise<KnowledgeChunk | null> {
   const chunks = await loadChunks();
   const needle = titleQuery.trim().toLowerCase();

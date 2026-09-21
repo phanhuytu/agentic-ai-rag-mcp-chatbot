@@ -3,45 +3,42 @@
 Scaffold for the Coursera course
 [Agentic AI Foundations: Build RAG & MCP Chatbots](https://www.coursera.org/learn/agentic-ai-foundations-rag-mcp-chatbots/).
 
-Full-stack starter: **Angular** chat UI + **Node.js/Express (TypeScript)** backend with RAG and tool stubs.
+Full-stack starter: **Angular** chat UI + **Node.js/Express (TypeScript)** backend with RAG and tool stubs. Deployable on **Vercel** (static FE + serverless API).
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Angular 19, reactive chat UI |
+| Frontend | Angular 19 chat UI |
 | Backend | Node.js, Express, TypeScript |
-| LLM providers | Gemini (live via `@google/genai`) + OpenAI scaffold |
-| RAG | Knowledge base OKR FPT (5 tiêu chí, 6 Rõ, CFR, coaching flow) |
-| Tools / MCP | REST stubs for customers, orders, weather |
+| LLM | Gemini (`@google/genai`) + OpenAI |
+| RAG | FPT OKR knowledge base (embedding locally; keyword default on Vercel) |
+| Tools | In-process registry + `/api/okr/*` (MCP-style demo) |
 
 ## Project layout
 
 ```text
 agentic-ai-rag-mcp-chatbot/
-├── frontend/                 # Angular chat app
+├── api/index.ts              # Vercel serverless entry (Express)
+├── vercel.json
+├── frontend/                 # Angular app
 ├── backend/
 │   ├── data/knowledge-base.md
 │   └── src/
-│       ├── controllers/
-│       ├── providers/        # gemini + openai
-│       ├── routes/
-│       ├── services/rag.service.ts
-│       └── mcp/              # reserved for MCP labs
-├── package.json              # root helper scripts
+├── package.json
 └── README.md
 ```
 
 ## Prerequisites
 
 - Node.js 20+
-- Gemini API key in `backend/.env` (never commit this file)
+- Gemini API key (never commit)
 
 ## Get a Gemini API key (keep it private)
 
-1. Open [Google AI Studio – API keys](https://aistudio.google.com/apikey) and sign in with your Google account.
-2. Click **Create API key** (or use an existing key).
-3. Copy the key **only into** `backend/.env` on your machine:
+1. Open [Google AI Studio – API keys](https://aistudio.google.com/apikey).
+2. Create / copy a key **only into** `backend/.env` (local) or Vercel Environment Variables (deploy).
+3. Never paste the key into chat, GitHub, or commits.
 
 ```env
 GEMINI_API_KEY=your_key_here
@@ -49,16 +46,12 @@ LLM_PROVIDER=gemini
 GEMINI_MODEL=gemini-3.6-flash
 ```
 
-4. Do **not** paste the key into chat, GitHub, screenshots, or commits. `.env` is gitignored; only `.env.example` is tracked.
-
-After changing `.env`, **restart** the backend (`Ctrl+C` then `npm run dev`) so dotenv reloads the key.
-
-## Quick start
+## Quick start (local)
 
 ```bash
 # Backend
 cd backend
-copy .env.example .env   # Windows — then edit .env and set GEMINI_API_KEY
+copy .env.example .env   # Windows — then set GEMINI_API_KEY
 npm install
 npm run dev
 
@@ -69,10 +62,7 @@ npm start
 ```
 
 - UI: http://localhost:4200  
-- API health: http://localhost:3000/health  
-- Chat: `POST http://localhost:3000/api/chat` with `{ "message": "What is RAG?" }`
-
-From repo root you can also use:
+- API: http://localhost:3000/api/health  
 
 ```bash
 npm run install:all
@@ -80,17 +70,42 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
+## Deploy on Vercel (full stack)
+
+1. Push repo to GitHub (already done if you followed earlier steps).
+2. [vercel.com](https://vercel.com) → **Add New Project** → import this repo.
+3. Framework preset: **Other** (vercel.json is provided).
+4. Set **Environment Variables** (Production):
+
+| Name | Example | Notes |
+|------|---------|--------|
+| `GEMINI_API_KEY` | (secret) | Required |
+| `LLM_PROVIDER` | `gemini` | |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | |
+| `CORS_ORIGIN` | `*` | Or your `https://….vercel.app` URL |
+| `RAG_MODE` | `keyword` | Recommended on Hobby (fast/cold-start safe) |
+| `API_ACCESS_TOKEN` | optional | If set, UI must send Bearer token |
+
+5. Deploy. Open the Vercel URL — FE and `/api/*` share the same origin (`apiBaseUrl` empty in production).
+6. Check `https://<app>.vercel.app/api/health`.
+
+Optional CLI:
+
+```bash
+npm i -g vercel
+vercel login
+vercel
+vercel --prod
+```
+
+**Notes for Vercel serverless**
+
+- Default RAG on Vercel is **keyword** (set `RAG_MODE=embedding` only if you accept slower cold starts / higher limits).
+- Streaming uses SSE (`/api/chat/stream`); keep `maxDuration` (60) in mind on your plan.
+- Real MCP stdio servers are **not** hosted on Vercel — keep them local if needed.
+
 ## Current behavior
 
-- Gemini/OpenAI chat with **embedding RAG** over FPT OKR knowledge base.
-- **Agent tools (demo):** chat may auto-call `validate_okr_draft` / `get_okr_playbook_section`.
-- **Streaming:** `POST /api/chat/stream` (SSE) — UI shows status + chunked reply.
-- **Auth (optional):** set `API_ACCESS_TOKEN` in `backend/.env`; UI stores Bearer token in sessionStorage.
-- Product UI: intake form, validate, export Markdown, local history.
-
-See plan: `docs/superpowers/plans/2026-09-21-coursera-refactor-product.md`.
-
-## Next course increments
-
-1. Real MCP stdio server (local / separate host — not required for this Vercel-friendly demo).
-2. Token streaming from the LLM provider (current demo chunks the final answer).
+- Chat + agent tools + SSE streaming + optional Bearer auth.
+- Intake form, validate, export Markdown, local history.
+- Plan: `docs/superpowers/plans/2026-09-21-coursera-refactor-product.md`.

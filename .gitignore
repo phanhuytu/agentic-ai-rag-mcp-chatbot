@@ -30,5 +30,5 @@ coverage/
 # Misc
 *.tgz
 .cache/
-tmp/
-temp/
+.tmp/
+.vercel/

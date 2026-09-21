@@ -11,19 +11,34 @@ import { registerOkrTools } from './tools/okr.tools.js';
 
 registerOkrTools();
 
+function resolveCorsOrigin(): boolean | string | string[] {
+  const raw = process.env.CORS_ORIGIN?.trim();
+  if (!raw || raw === '*') {
+    return true;
+  }
+  if (raw.includes(',')) {
+    return raw.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return raw;
+}
+
 export function createApp() {
   const app = express();
-  const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:4200';
 
-  app.use(cors({ origin: corsOrigin }));
+  app.use(cors({ origin: resolveCorsOrigin() }));
   app.use(express.json({ limit: '1mb' }));
 
-  app.get('/health', (_req, res) => {
+  const healthHandler = (_req: express.Request, res: express.Response) => {
     res.json({
       status: 'ok',
       authRequired: Boolean(process.env.API_ACCESS_TOKEN?.trim()),
+      ragMode: process.env.RAG_MODE ?? (process.env.VERCEL ? 'keyword' : 'embedding'),
+      platform: process.env.VERCEL ? 'vercel' : 'local',
     });
-  });
+  };
+
+  app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
 
   app.use('/api', requireAuth);
   app.use('/api/chat', chatRouter);
