@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { buildOkrSystemInstruction, sanitizeProviderError } from './prompt.js';
 import type { ChatMessage } from '../types/chat.js';
 import type { GenerateResponseInput, LlmProvider } from './types.js';
 
@@ -41,30 +42,6 @@ function buildContents(input: GenerateResponseInput): GeminiContent[] {
   return contents;
 }
 
-function buildSystemInstruction(context?: string): string {
-  const base = [
-    'You are an OKR coach for FPT employees.',
-    'Your goal is to help users create appropriate, measurable, and effective OKRs aligned with FPT practice.',
-    'Follow FPT guidance: max 3 Objectives, 2-4 Key Results each, Align to upper-level OKRs, measurable KRs with baseline/target/deadline, apply 6 Rõ, avoid the 6 common traps, and suggest CFR check-ins.',
-    'Prefer Vietnamese when the user writes in Vietnamese; otherwise match the user language.',
-    'When asked to draft OKRs, ask for missing role/unit/period/priorities if needed, then output a clear O/KR structure and a short quality checklist.',
-    'Do not invent confidential FPT internal metrics. Use placeholders and mark them as needing real numbers.',
-    'Ground answers in the retrieved knowledge-base context when available. If context is insufficient, say what is missing.',
-  ].join(' ');
-
-  if (!context?.trim()) {
-    return base;
-  }
-
-  return `${base}\n\nRetrieved FPT OKR context:\n${context}`;
-}
-
-function sanitizeErrorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  // Never echo secrets if an SDK/network error embeds query params or headers.
-  return raw.replace(/key=[^&\s]+/gi, 'key=[REDACTED]').replace(/AIza[0-9A-Za-z_-]{10,}/g, '[REDACTED]');
-}
-
 export class GeminiProvider implements LlmProvider {
   readonly name = 'gemini';
   private readonly client: GoogleGenAI;
@@ -91,7 +68,7 @@ export class GeminiProvider implements LlmProvider {
         model: this.model,
         contents: buildContents(input),
         config: {
-          systemInstruction: buildSystemInstruction(input.context),
+          systemInstruction: buildOkrSystemInstruction(input.context),
         },
       });
 
@@ -102,7 +79,7 @@ export class GeminiProvider implements LlmProvider {
 
       return text;
     } catch (error) {
-      throw new Error(`Gemini generateResponse failed: ${sanitizeErrorMessage(error)}`);
+      throw new Error(`Gemini generateResponse failed: ${sanitizeProviderError(error)}`);
     }
   }
 
@@ -120,7 +97,7 @@ export class GeminiProvider implements LlmProvider {
 
       return values;
     } catch (error) {
-      throw new Error(`Gemini generateEmbedding failed: ${sanitizeErrorMessage(error)}`);
+      throw new Error(`Gemini generateEmbedding failed: ${sanitizeProviderError(error)}`);
     }
   }
 }

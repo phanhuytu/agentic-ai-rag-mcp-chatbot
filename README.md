@@ -82,15 +82,15 @@ npm run dev:frontend
 
 ## Current behavior
 
-- Gemini chat is live when `GEMINI_API_KEY` is set in `backend/.env`.
-- RAG retrieves sections from `backend/data/knowledge-base.md` (FPT OKR playbook).
-- Assistant coaches OKR drafting with Align, 5 criteria, 6 Rõ, traps, and CFR.
-- Tool endpoints return mock data for later MCP / tool-calling labs.
+- Gemini chat is live when `GEMINI_API_KEY` is set in `backend/.env` (or OpenAI via `LLM_PROVIDER=openai`).
+- RAG uses **embeddings + cosine similarity** over `backend/data/knowledge-base.md` (keyword fallback).
+- OKR tools (Coursera/MCP style): `GET/POST /api/okr/*` — validate draft, list/get playbook sections.
+- Product UI: intake form, local chat history, validate + export Markdown.
+
+See plan: `docs/superpowers/plans/2026-09-21-coursera-refactor-product.md`.
 
 ## Next course increments
 
-1. Wire OpenAI provider + switch embeddings RAG to cosine similarity.
-2. Add tool-calling / MCP server around customers, orders, weather.
-3. Polish UI (Tailwind / icons) to match course vibe-coding labs.
-
-Course details will be applied as you provide lab notes.
+1. Wrap `tool-registry` as a real MCP server (stdio/SSE).
+2. Add agent loop that auto-calls OKR tools during chat.
+3. Streaming replies + richer session sync.

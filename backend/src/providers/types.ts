@@ -9,6 +9,5 @@ export type GenerateResponseInput = {
 export interface LlmProvider {
   readonly name: string;
   generateResponse(input: GenerateResponseInput): Promise<string>;
-  /** Optional; wire embeddings during RAG labs. */
-  generateEmbedding?(text: string): Promise<number[]>;
+  generateEmbedding(text: string): Promise<number[]>;
 }

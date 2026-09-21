@@ -1,7 +1,7 @@
 <div class="page">
   <header class="header">
     <div>
-      <p class="eyebrow">RAG · OKR FPT</p>
+      <p class="eyebrow">RAG · Embedding · OKR FPT</p>
       <h1>{{ title }}</h1>
     </div>
     <label class="toggle">
@@ -10,34 +10,78 @@
     </label>
   </header>
 
-  <main class="chat-panel">
-    <div #messageList class="messages" aria-live="polite">
-      @for (message of messages; track $index) {
-        <article class="bubble" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
-          <span class="role">{{ message.role }}</span>
-          <p>{{ message.content }}</p>
-        </article>
-      }
+  <div class="layout">
+    <aside class="intake-panel">
+      <h2>Thông tin soạn OKR</h2>
+      <label>
+        Vai trò
+        <input name="role" [(ngModel)]="intake.role" placeholder="VD: Project Lead" />
+      </label>
+      <label>
+        Đơn vị
+        <input name="unit" [(ngModel)]="intake.unit" placeholder="VD: FSOFT / Delivery" />
+      </label>
+      <label>
+        Kỳ
+        <input name="period" [(ngModel)]="intake.period" placeholder="Q1 / Q2 / 2026" />
+      </label>
+      <label>
+        Ưu tiên trong kỳ
+        <textarea name="priorities" [(ngModel)]="intake.priorities" rows="3" placeholder="1–3 ưu tiên chính"></textarea>
+      </label>
+      <label>
+        OKR cấp trên
+        <textarea name="upperOkrs" [(ngModel)]="intake.upperOkrs" rows="4" placeholder="Dán O/KR cấp trên nếu có"></textarea>
+      </label>
 
-      @if (isSending) {
-        <p class="status">Thinking…</p>
-      }
+      <div class="intake-actions">
+        <button type="button" class="primary" (click)="generateFromIntake()" [disabled]="isSending">Soạn OKR</button>
+        <button type="button" (click)="validateLastOkr()" [disabled]="isSending">Validate bản cuối</button>
+        <button type="button" (click)="exportLastOkr()" [disabled]="isSending">Export .md</button>
+        <button type="button" class="ghost" (click)="clearHistory()" [disabled]="isSending">Xóa lịch sử</button>
+      </div>
 
-      @if (error) {
-        <p class="error">{{ error }}</p>
+      @if (validation) {
+        <div class="validation" [class.ok]="validation.ok" [class.bad]="!validation.ok">
+          <strong>{{ validation.summary }}</strong>
+          <ul>
+            @for (issue of validation.issues; track issue.code) {
+              <li>{{ issue.message }}</li>
+            }
+          </ul>
+        </div>
       }
-    </div>
+    </aside>
 
-    <form class="composer" (ngSubmit)="sendMessage()">
-      <input
-        type="text"
-        name="draft"
-        [(ngModel)]="draft"
-        placeholder="Ask something…"
-        autocomplete="off"
-        [disabled]="isSending"
-      />
-      <button type="submit" [disabled]="isSending || !draft.trim()">Send</button>
-    </form>
-  </main>
+    <main class="chat-panel">
+      <div #messageList class="messages" aria-live="polite">
+        @for (message of messages; track $index) {
+          <article class="bubble" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+            <span class="role">{{ message.role }}</span>
+            <p>{{ message.content }}</p>
+          </article>
+        }
+
+        @if (isSending) {
+          <p class="status">Đang soạn / truy xuất RAG… (lần đầu embedding có thể mất vài giây)</p>
+        }
+
+        @if (error) {
+          <p class="error">{{ error }}</p>
+        }
+      </div>
+
+      <form class="composer" (ngSubmit)="sendMessage()">
+        <input
+          type="text"
+          name="draft"
+          [(ngModel)]="draft"
+          placeholder="Hỏi thêm về 6 Rõ, Align, CFR…"
+          autocomplete="off"
+          [disabled]="isSending"
+        />
+        <button type="submit" [disabled]="isSending || !draft.trim()">Gửi</button>
+      </form>
+    </main>
+  </div>
 </div>

@@ -1,72 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { LlmProvider } from '../providers/types.js';
+import { parseKnowledgeChunks, type KnowledgeChunk } from './knowledge-loader.js';
+import { cosineSimilarity } from './similarity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const knowledgePath = path.resolve(__dirname, '../../data/knowledge-base.md');
 
-const DEFAULT_CHUNK_TITLES = [
-  'Quy trình coaching để tạo OKR phù hợp',
-  'Cách viết Objective tốt',
-  'Cách viết Key Result tốt',
-  'Checklist review bản OKR trước khi nộp',
-];
+const TOP_K = Number(process.env.RAG_TOP_K ?? 4);
+const MIN_SCORE = Number(process.env.RAG_MIN_SCORE ?? 0.35);
 
-const INTENT_BOOST: Array<{ pattern: RegExp; titles: string[] }> = [
-  {
-    pattern: /tạo|viết|đặt|xây\s*dựng|soạn|draft|create|write/i,
-    titles: [
-      'Quy trình coaching để tạo OKR phù hợp',
-      'Cách viết Objective tốt',
-      'Cách viết Key Result tốt',
-      'Cấu trúc OKR chuẩn FPT',
-    ],
-  },
-  {
-    pattern: /6\s*rõ|sáu\s*rõ|6\s*ro/i,
-    titles: ['Nguyên tắc 6 Rõ giai đoạn 2026-2028'],
-  },
-  {
-    pattern: /bẫy|sai\s*lầm|lỗi|tránh|pitfall/i,
-    titles: ['Sáu bẫy thường gặp khi đặt OKR', 'Năm tiêu chí đặt OKR đúng theo FPT'],
-  },
-  {
-    pattern: /cfr|phản\s*hồi|ghi\s*nhận|check-?in|1-?on-?1/i,
-    titles: ['CFR đồng hành cùng OKR'],
-  },
-  {
-    pattern: /align|hướng\s*tâm|cấp\s*trên|liên\s*kết/i,
-    titles: ['Alignment hướng tâm giữa các cấp'],
-  },
-  {
-    pattern: /ví\s*dụ|mẫu|example|sample/i,
-    titles: ['Ví dụ OKR mẫu theo vai trò'],
-  },
-  {
-    pattern: /checklist|review|kiểm\s*tra|chấm/i,
-    titles: ['Checklist review bản OKR trước khi nộp', 'Năm tiêu chí đặt OKR đúng theo FPT'],
-  },
-];
-
-type Chunk = {
-  title: string;
-  body: string;
+type IndexedChunk = KnowledgeChunk & {
+  embedding: number[];
 };
 
-function parseChunks(raw: string): Chunk[] {
-  return raw
-    .split(/\n##\s+/)
-    .map((part, index) => (index === 0 ? part : `## ${part}`))
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((body) => {
-      const titleMatch = body.match(/^##\s+(.+)$/m);
-      return {
-        title: titleMatch?.[1]?.trim() ?? 'Overview',
-        body,
-      };
-    });
-}
+type EmbeddingIndex = {
+  providerName: string;
+  chunks: IndexedChunk[];
+};
+
+let embeddingIndex: EmbeddingIndex | null = null;
+let indexPromise: Promise<EmbeddingIndex> | null = null;
 
 function tokenize(query: string): string[] {
   return query
@@ -76,65 +31,122 @@ function tokenize(query: string): string[] {
     .filter((term) => term.length > 1);
 }
 
-function scoreChunk(chunk: Chunk, terms: string[]): number {
-  const haystack = `${chunk.title}\n${chunk.body}`.toLowerCase();
-  let score = terms.reduce((sum, term) => (haystack.includes(term) ? sum + 1 : sum), 0);
+function keywordFallback(chunks: KnowledgeChunk[], query: string): string {
+  const terms = tokenize(query);
+  const ranked = chunks
+    .map((chunk) => {
+      const haystack = `${chunk.title}\n${chunk.body}`.toLowerCase();
+      const score = terms.reduce((sum, term) => (haystack.includes(term) ? sum + 1 : sum), 0);
+      return { chunk, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, TOP_K)
+    .map((item) => item.chunk.body);
 
-  if (haystack.includes('okr')) {
-    score += 0.5;
+  if (ranked.length > 0) {
+    return ranked.join('\n\n---\n\n');
   }
 
-  return score;
+  // Default coaching sections when nothing matches.
+  const defaults = [
+    'Quy trình coaching để tạo OKR phù hợp',
+    'Cách viết Objective tốt',
+    'Cách viết Key Result tốt',
+    'Checklist review bản OKR trước khi nộp',
+  ];
+  return chunks
+    .filter((chunk) => defaults.includes(chunk.title))
+    .map((chunk) => chunk.body)
+    .join('\n\n---\n\n');
 }
 
-function pickByTitles(chunks: Chunk[], titles: string[]): Chunk[] {
-  const selected: Chunk[] = [];
-  for (const title of titles) {
-    const found = chunks.find((chunk) => chunk.title === title);
-    if (found && !selected.some((item) => item.title === found.title)) {
-      selected.push(found);
-    }
+async function loadChunks(): Promise<KnowledgeChunk[]> {
+  const raw = await readFile(knowledgePath, 'utf8');
+  return parseKnowledgeChunks(raw);
+}
+
+async function ensureEmbeddingIndex(provider: LlmProvider): Promise<EmbeddingIndex> {
+  if (embeddingIndex && embeddingIndex.providerName === provider.name) {
+    return embeddingIndex;
   }
-  return selected;
+
+  if (!provider.generateEmbedding) {
+    throw new Error(`Provider ${provider.name} does not support embeddings.`);
+  }
+
+  if (!indexPromise) {
+    indexPromise = (async () => {
+      const chunks = await loadChunks();
+      const indexed: IndexedChunk[] = [];
+
+      for (const chunk of chunks) {
+        const embedding = await provider.generateEmbedding!(`${chunk.title}\n${chunk.body}`);
+        indexed.push({ ...chunk, embedding });
+      }
+
+      const built: EmbeddingIndex = {
+        providerName: provider.name,
+        chunks: indexed,
+      };
+      embeddingIndex = built;
+      return built;
+    })().finally(() => {
+      indexPromise = null;
+    });
+  }
+
+  return indexPromise;
 }
 
 /**
- * Keyword RAG over the FPT OKR knowledge base.
- * Returns the most relevant sections for coaching OKR creation.
+ * Embedding RAG with cosine similarity ranking.
+ * Falls back to keyword retrieval if embeddings fail.
  */
-export async function buildRagContext(query: string): Promise<string> {
-  const raw = await readFile(knowledgePath, 'utf8');
-  const chunks = parseChunks(raw);
-  const terms = tokenize(query);
+export async function buildRagContext(query: string, provider: LlmProvider): Promise<string> {
+  const chunks = await loadChunks();
 
-  const ranked = chunks
-    .map((chunk) => ({ chunk, score: scoreChunk(chunk, terms) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  const selected: Chunk[] = [];
-
-  for (const rule of INTENT_BOOST) {
-    if (rule.pattern.test(query)) {
-      selected.push(...pickByTitles(chunks, rule.titles));
+  try {
+    if (!provider.generateEmbedding) {
+      return keywordFallback(chunks, query);
     }
-  }
 
-  for (const item of ranked) {
-    if (selected.length >= 4) {
-      break;
-    }
-    if (!selected.some((chunk) => chunk.title === item.chunk.title)) {
-      selected.push(item.chunk);
-    }
-  }
+    const index = await ensureEmbeddingIndex(provider);
+    const queryEmbedding = await provider.generateEmbedding(query);
 
-  if (selected.length === 0) {
-    selected.push(...pickByTitles(chunks, DEFAULT_CHUNK_TITLES));
-  }
+    const ranked = index.chunks
+      .map((chunk) => ({
+        chunk,
+        score: cosineSimilarity(queryEmbedding, chunk.embedding),
+      }))
+      .sort((a, b) => b.score - a.score);
 
-  return selected
-    .slice(0, 4)
-    .map((chunk) => chunk.body)
-    .join('\n\n---\n\n');
+    const selected = ranked.filter((item) => item.score >= MIN_SCORE).slice(0, TOP_K);
+    const finalSelection = selected.length > 0 ? selected : ranked.slice(0, TOP_K);
+
+    return finalSelection.map((item) => item.chunk.body).join('\n\n---\n\n');
+  } catch (error) {
+    console.warn(
+      '[rag] Embedding retrieval failed, using keyword fallback:',
+      error instanceof Error ? error.message : error,
+    );
+    return keywordFallback(chunks, query);
+  }
+}
+
+/** Test helper / MCP tool: list playbook section titles. */
+export async function listKnowledgeTitles(): Promise<string[]> {
+  const chunks = await loadChunks();
+  return chunks.map((chunk) => chunk.title);
+}
+
+/** Test helper / MCP tool: get one section by title (case-insensitive contains). */
+export async function getKnowledgeSectionByTitle(titleQuery: string): Promise<KnowledgeChunk | null> {
+  const chunks = await loadChunks();
+  const needle = titleQuery.trim().toLowerCase();
+  return (
+    chunks.find((chunk) => chunk.title.toLowerCase() === needle) ??
+    chunks.find((chunk) => chunk.title.toLowerCase().includes(needle)) ??
+    null
+  );
 }
