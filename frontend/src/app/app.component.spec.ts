@@ -16,9 +16,9 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
-  it(`should have the title 'Agentic AI Chat'`, () => {
+  it(`should have the title 'FPT OKR Coach'`, () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
-    expect(app.title).toEqual('Agentic AI Chat');
+    expect(app.title).toEqual('FPT OKR Coach');
   });
 });

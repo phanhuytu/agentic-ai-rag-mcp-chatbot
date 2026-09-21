@@ -31,7 +31,10 @@ export async function handleChat(req: Request, res: Response) {
 
     res.json(response);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Unknown error';
+    const raw = error instanceof Error ? error.message : 'Unknown error';
+    const detail = raw
+      .replace(/key=[^&\s]+/gi, 'key=[REDACTED]')
+      .replace(/AIza[0-9A-Za-z_-]{10,}/g, '[REDACTED]');
     res.status(500).json({ error: 'Chat failed', detail });
   }
 }

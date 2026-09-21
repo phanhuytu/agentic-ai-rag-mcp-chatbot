@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChatMessage } from './models/chat-message';
@@ -14,7 +15,7 @@ export class AppComponent {
 
   @ViewChild('messageList') private messageList?: ElementRef<HTMLDivElement>;
 
-  readonly title = 'Agentic AI Chat';
+  readonly title = 'FPT OKR Coach';
   draft = '';
   useRag = true;
   isSending = false;
@@ -23,7 +24,8 @@ export class AppComponent {
     {
       role: 'assistant',
       content:
-        'Scaffold ready. Ask about RAG, MCP, shipping, or returns. Wire API keys later for real LLM answers.',
+        'Xin chào! Tôi là trợ lý OKR theo khung FPT (Align, 5 tiêu chí, 6 Rõ, CFR).\n\n' +
+        'Bạn có thể hỏi cách viết O/KR, nhờ review bản nháp, hoặc nói vai trò + ưu tiên quý này để tôi giúp soạn OKR.',
     },
   ];
 
@@ -56,13 +58,29 @@ export class AppComponent {
       },
       error: (err: unknown) => {
         this.isSending = false;
-        this.error =
-          err instanceof Error
-            ? err.message
-            : 'Failed to reach backend. Is it running on http://localhost:3000?';
+        this.error = this.formatChatError(err);
         this.scrollToBottom();
       },
     });
+  }
+
+  private formatChatError(err: unknown): string {
+    if (err instanceof HttpErrorResponse) {
+      const body = err.error as { detail?: string; error?: string } | string | null;
+      if (body && typeof body === 'object') {
+        return body.detail || body.error || `Backend error (${err.status})`;
+      }
+      if (err.status === 0) {
+        return 'Failed to reach backend. Is it running on http://localhost:3000?';
+      }
+      return err.message || `Backend error (${err.status})`;
+    }
+
+    if (err instanceof Error) {
+      return err.message;
+    }
+
+    return 'Failed to reach backend. Is it running on http://localhost:3000?';
   }
 
   private scrollToBottom(): void {

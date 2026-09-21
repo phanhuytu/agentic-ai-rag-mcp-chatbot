@@ -11,8 +11,8 @@ Full-stack starter: **Angular** chat UI + **Node.js/Express (TypeScript)** backe
 |-------|------|
 | Frontend | Angular 19, reactive chat UI |
 | Backend | Node.js, Express, TypeScript |
-| LLM providers | Gemini + OpenAI scaffolds (wire SDKs in labs) |
-| RAG | Local FAQ knowledge base + keyword retrieval (upgrade to embeddings later) |
+| LLM providers | Gemini (live via `@google/genai`) + OpenAI scaffold |
+| RAG | Knowledge base OKR FPT (5 tiêu chí, 6 Rõ, CFR, coaching flow) |
 | Tools / MCP | REST stubs for customers, orders, weather |
 
 ## Project layout
@@ -35,14 +35,30 @@ agentic-ai-rag-mcp-chatbot/
 ## Prerequisites
 
 - Node.js 20+
-- API keys later (optional for scaffold): Google Gemini and/or OpenAI
+- Gemini API key in `backend/.env` (never commit this file)
+
+## Get a Gemini API key (keep it private)
+
+1. Open [Google AI Studio – API keys](https://aistudio.google.com/apikey) and sign in with your Google account.
+2. Click **Create API key** (or use an existing key).
+3. Copy the key **only into** `backend/.env` on your machine:
+
+```env
+GEMINI_API_KEY=your_key_here
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+4. Do **not** paste the key into chat, GitHub, screenshots, or commits. `.env` is gitignored; only `.env.example` is tracked.
+
+After changing `.env`, **restart** the backend (`Ctrl+C` then `npm run dev`) so dotenv reloads the key.
 
 ## Quick start
 
 ```bash
 # Backend
 cd backend
-copy .env.example .env   # Windows
+copy .env.example .env   # Windows — then edit .env and set GEMINI_API_KEY
 npm install
 npm run dev
 
@@ -64,17 +80,17 @@ npm run dev:backend
 npm run dev:frontend
 ```
 
-## Current behavior (scaffold)
+## Current behavior
 
-- Chat works **without API keys** via placeholder provider replies.
-- RAG keyword match over `backend/data/knowledge-base.md`.
+- Gemini chat is live when `GEMINI_API_KEY` is set in `backend/.env`.
+- RAG retrieves sections from `backend/data/knowledge-base.md` (FPT OKR playbook).
+- Assistant coaches OKR drafting with Align, 5 criteria, 6 Rõ, traps, and CFR.
 - Tool endpoints return mock data for later MCP / tool-calling labs.
 
 ## Next course increments
 
-1. Implement real Gemini / OpenAI `generateResponse` + embeddings.
-2. Replace keyword RAG with cosine-similarity ranking.
-3. Add tool-calling / MCP server around customers, orders, weather.
-4. Polish UI (Tailwind / icons) to match course vibe-coding labs.
+1. Wire OpenAI provider + switch embeddings RAG to cosine similarity.
+2. Add tool-calling / MCP server around customers, orders, weather.
+3. Polish UI (Tailwind / icons) to match course vibe-coding labs.
 
 Course details will be applied as you provide lab notes.
