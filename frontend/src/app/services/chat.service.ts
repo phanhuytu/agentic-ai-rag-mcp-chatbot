@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ChatApiResponse, ChatMessage } from '../models/chat-message';
 import { AuthService } from './auth.service';
@@ -9,7 +9,13 @@ export type ChatStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'tool'; name: string; ok: boolean }
   | { type: 'delta'; text: string }
-  | { type: 'done'; provider: string; ragContextUsed: boolean; toolsUsed: string[] }
+  | {
+      type: 'done';
+      provider: string;
+      ragContextUsed: boolean;
+      toolsUsed: string[];
+      reply?: string;
+    }
   | { type: 'error'; detail: string };
 
 @Injectable({ providedIn: 'root' })
@@ -27,6 +33,10 @@ export class ChatService {
     });
   }
 
+  askOnce(message: string, history: ChatMessage[], useRag = true): Promise<ChatApiResponse> {
+    return firstValueFrom(this.sendMessage(message, history, useRag));
+  }
+
   async streamMessage(
     message: string,
     history: ChatMessage[],
@@ -35,6 +45,7 @@ export class ChatService {
   ): Promise<void> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
     };
     const token = this.auth.getToken();
     if (token) {
@@ -77,20 +88,32 @@ export class ChatService {
       buffer = parts.pop() ?? '';
 
       for (const part of parts) {
-        const line = part
-          .split('\n')
-          .map((item) => item.trim())
-          .find((item) => item.startsWith('data:'));
-        if (!line) {
-          continue;
-        }
-        const json = line.replace(/^data:\s*/, '');
-        try {
-          onEvent(JSON.parse(json) as ChatStreamEvent);
-        } catch {
-          // ignore malformed chunk
-        }
+        this.dispatchSsePart(part, onEvent);
       }
     }
+
+    if (buffer.trim()) {
+      this.dispatchSsePart(buffer, onEvent);
+    }
+  }
+
+  private dispatchSsePart(part: string, onEvent: (event: ChatStreamEvent) => void): void {
+    const line = part
+      .split('\n')
+      .map((item) => item.trim())
+      .find((item) => item.startsWith('data:'));
+    if (!line) {
+      return;
+    }
+
+    const json = line.replace(/^data:\s*/, '');
+    let event: ChatStreamEvent;
+    try {
+      event = JSON.parse(json) as ChatStreamEvent;
+    } catch {
+      return;
+    }
+
+    onEvent(event);
   }
 }

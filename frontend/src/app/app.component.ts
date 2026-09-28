@@ -1,9 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, NgZone, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChatMessage } from './models/chat-message';
 import { AuthService } from './services/auth.service';
-import { ChatService } from './services/chat.service';
+import { ChatService, ChatStreamEvent } from './services/chat.service';
 import { OkrService, OkrValidationResult } from './services/okr.service';
 
 const STORAGE_KEY = 'fpt-okr-coach-messages';
@@ -18,6 +18,7 @@ export class AppComponent implements OnInit {
   private readonly chatService = inject(ChatService);
   private readonly okrService = inject(OkrService);
   private readonly authService = inject(AuthService);
+  private readonly zone = inject(NgZone);
 
   @ViewChild('messageList') private messageList?: ElementRef<HTMLDivElement>;
 
@@ -95,53 +96,65 @@ export class AppComponent implements OnInit {
     this.persist();
     this.scrollToBottom();
 
-    const history = this.messages.filter((message) => message.role !== 'system');
+    const historyForApi = this.messages.slice(0, -1).filter((message) => message.role !== 'system');
     const assistantIndex = this.messages.length;
     this.messages = [...this.messages, { role: 'assistant', content: '' }];
 
-    try {
-      let provider = '';
-      let rag = false;
-      let tools: string[] = [];
+    let provider = '';
+    let rag = false;
+    let tools: string[] = [];
+    let assembled = '';
 
-      await this.chatService.streamMessage(text, history.slice(0, -1), this.useRag, (event) => {
-        if (event.type === 'status') {
-          this.statusText = event.message;
-        } else if (event.type === 'tool') {
-          this.statusText = `tool ${event.name}: ${event.ok ? 'ok' : 'fail'}`;
-        } else if (event.type === 'delta') {
-          const current = this.messages[assistantIndex];
-          if (current) {
-            current.content += event.text;
-            this.messages = [...this.messages];
-            this.scrollToBottom();
+    try {
+      await this.chatService.streamMessage(text, historyForApi, this.useRag, (event) => {
+        this.zone.run(() => this.applyStreamEvent(event, assistantIndex, (state) => {
+          if (state.provider) {
+            provider = state.provider;
           }
-        } else if (event.type === 'done') {
-          provider = event.provider;
-          rag = event.ragContextUsed;
-          tools = event.toolsUsed ?? [];
-        } else if (event.type === 'error') {
-          throw new Error(event.detail);
-        }
+          if (state.rag !== undefined) {
+            rag = state.rag;
+          }
+          if (state.tools) {
+            tools = state.tools;
+          }
+          if (state.assembled !== undefined) {
+            assembled = state.assembled;
+          }
+        }));
       });
 
-      const current = this.messages[assistantIndex];
-      if (current) {
-        const bits = [
-          provider || 'llm',
-          rag ? 'RAG' : null,
-          tools.length ? `tools:${tools.join(',')}` : null,
-        ].filter(Boolean);
-        current.content = `${current.content.trim()}\n\n— ${bits.join(' · ')}`;
-        this.messages = [...this.messages];
+      if (!assembled.trim()) {
+        this.statusText = 'stream empty — fallback…';
+        const fallback = await this.chatService.askOnce(text, historyForApi, this.useRag);
+        assembled = fallback.reply;
+        provider = fallback.provider;
+        rag = fallback.ragContextUsed;
+        tools = fallback.toolsUsed ?? [];
+        this.patchAssistant(assistantIndex, assembled);
       }
 
+      this.finalizeAssistant(assistantIndex, assembled, provider, rag, tools);
       this.statusText = '';
       this.persist();
     } catch (err: unknown) {
-      this.messages = this.messages.slice(0, -1);
-      this.error = this.formatChatError(err);
-      this.persist();
+      try {
+        this.statusText = 'retry without stream…';
+        const fallback = await this.chatService.askOnce(text, historyForApi, this.useRag);
+        this.finalizeAssistant(
+          assistantIndex,
+          fallback.reply,
+          fallback.provider,
+          fallback.ragContextUsed,
+          fallback.toolsUsed ?? [],
+        );
+        this.error = '';
+        this.statusText = '';
+        this.persist();
+      } catch {
+        this.messages = this.messages.slice(0, -1);
+        this.error = this.formatChatError(err);
+        this.persist();
+      }
     } finally {
       this.isSending = false;
       this.scrollToBottom();
@@ -150,7 +163,7 @@ export class AppComponent implements OnInit {
 
   exportLastOkr(): void {
     const lastAssistant = [...this.messages].reverse().find((m) => m.role === 'assistant');
-    if (!lastAssistant) {
+    if (!lastAssistant?.content.trim()) {
       this.error = 'Chưa có bản OKR để export.';
       return;
     }
@@ -167,7 +180,7 @@ export class AppComponent implements OnInit {
 
   validateLastOkr(): void {
     const lastAssistant = [...this.messages].reverse().find((m) => m.role === 'assistant');
-    if (!lastAssistant) {
+    if (!lastAssistant?.content.trim()) {
       this.error = 'Chưa có bản OKR để validate.';
       return;
     }
@@ -187,6 +200,82 @@ export class AppComponent implements OnInit {
     this.messages = [this.welcome];
     this.validation = null;
     localStorage.removeItem(STORAGE_KEY);
+  }
+
+  private applyStreamEvent(
+    event: ChatStreamEvent,
+    assistantIndex: number,
+    sync: (state: {
+      provider?: string;
+      rag?: boolean;
+      tools?: string[];
+      assembled?: string;
+    }) => void,
+  ): void {
+    if (event.type === 'status') {
+      this.statusText = event.message;
+      return;
+    }
+
+    if (event.type === 'tool') {
+      this.statusText = `tool ${event.name}: ${event.ok ? 'ok' : 'fail'}`;
+      return;
+    }
+
+    if (event.type === 'delta') {
+      const current = this.messages[assistantIndex];
+      if (!current) {
+        return;
+      }
+      current.content += event.text;
+      sync({ assembled: current.content });
+      this.messages = [...this.messages];
+      this.scrollToBottom();
+      return;
+    }
+
+    if (event.type === 'done') {
+      const reply = event.reply?.trim() || this.messages[assistantIndex]?.content || '';
+      if (reply) {
+        this.patchAssistant(assistantIndex, reply);
+      }
+      sync({
+        provider: event.provider,
+        rag: event.ragContextUsed,
+        tools: event.toolsUsed ?? [],
+        assembled: reply,
+      });
+      return;
+    }
+
+    if (event.type === 'error') {
+      throw new Error(event.detail);
+    }
+  }
+
+  private patchAssistant(index: number, content: string): void {
+    const current = this.messages[index];
+    if (!current) {
+      return;
+    }
+    current.content = content;
+    this.messages = [...this.messages];
+  }
+
+  private finalizeAssistant(
+    index: number,
+    reply: string,
+    provider: string,
+    rag: boolean,
+    tools: string[],
+  ): void {
+    const bits = [
+      provider || 'llm',
+      rag ? 'RAG' : null,
+      tools.length ? `tools:${tools.join(',')}` : null,
+    ].filter(Boolean);
+
+    this.patchAssistant(index, `${reply.trim()}\n\n— ${bits.join(' · ')}`);
   }
 
   private buildIntakePrompt(): string {

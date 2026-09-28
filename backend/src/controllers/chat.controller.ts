@@ -4,7 +4,9 @@ import { chunkText, runAgent, type AgentEvent } from '../services/agent.service.
 import type { ChatRequestBody, ChatResponseBody } from '../types/chat.js';
 
 function writeSse(res: Response, event: AgentEvent | { type: string; [key: string]: unknown }) {
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
+  if (!res.writableEnded) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
 }
 
 export const handleChat = asyncHandler(async (req: Request, res: Response) => {
@@ -31,7 +33,7 @@ export const handleChat = asyncHandler(async (req: Request, res: Response) => {
   res.json(response);
 });
 
-/** Demo SSE stream: status/tool events, then chunked final answer. */
+/** Demo SSE stream: status/tool events, then answer deltas, then done(+full reply). */
 export const handleChatStream = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as ChatRequestBody;
   const message = body.message?.trim();
@@ -43,7 +45,11 @@ export const handleChatStream = asyncHandler(async (req: Request, res: Response)
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
+
+  // Immediate byte so proxies/clients know the stream is alive.
+  writeSse(res, { type: 'status', message: 'connected' });
 
   try {
     const result = await runAgent(
@@ -66,6 +72,7 @@ export const handleChatStream = asyncHandler(async (req: Request, res: Response)
       provider: result.provider,
       ragContextUsed: result.ragContextUsed,
       toolsUsed: result.toolsUsed,
+      reply: result.reply,
     });
     res.end();
   } catch (error) {
