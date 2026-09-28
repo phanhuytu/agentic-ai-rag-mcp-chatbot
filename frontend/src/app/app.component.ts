@@ -5,6 +5,7 @@ import { ChatMessage } from './models/chat-message';
 import { AuthService } from './services/auth.service';
 import { ChatService, ChatStreamEvent } from './services/chat.service';
 import { OkrService, OkrValidationResult } from './services/okr.service';
+import { parseOkrDraftMarkdown } from './utils/okr-draft-parser';
 
 const STORAGE_KEY = 'fpt-okr-coach-messages';
 
@@ -37,6 +38,8 @@ export class AppComponent implements OnInit {
     period: 'Q1',
     upperOkrs: '',
     priorities: '',
+    skillDev: false,
+    skillDevNote: '',
   };
 
   messages: ChatMessage[] = [];
@@ -74,7 +77,7 @@ export class AppComponent implements OnInit {
   generateFromIntake(): void {
     const prompt = this.buildIntakePrompt();
     if (!prompt) {
-      this.error = 'Cần ít nhất vai trò hoặc ưu tiên để soạn OKR.';
+      this.error = 'Cần ít nhất vai trò, ưu tiên, hoặc bật skill-dev để soạn OKR.';
       return;
     }
     this.draft = prompt;
@@ -168,12 +171,26 @@ export class AppComponent implements OnInit {
       return;
     }
 
-    const markdown = `# OKR draft\n\n${lastAssistant.content}\n`;
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const stamp = Date.now();
+    const body = lastAssistant.content.trim();
+    const markdown = `# OKR draft\n\n${body}\n`;
+    this.downloadBlob(`okr-draft-${stamp}.md`, markdown, 'text/markdown;charset=utf-8');
+
+    const json = parseOkrDraftMarkdown(body);
+    this.downloadBlob(
+      `okr-draft-${stamp}.json`,
+      `${JSON.stringify(json, null, 2)}\n`,
+      'application/json;charset=utf-8',
+    );
+    this.error = '';
+  }
+
+  private downloadBlob(filename: string, content: string, mime: string): void {
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `okr-draft-${Date.now()}.md`;
+    anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -279,22 +296,37 @@ export class AppComponent implements OnInit {
   }
 
   private buildIntakePrompt(): string {
-    const { role, unit, period, upperOkrs, priorities } = this.intake;
-    if (!role.trim() && !priorities.trim() && !upperOkrs.trim()) {
+    const { role, unit, period, upperOkrs, priorities, skillDev, skillDevNote } = this.intake;
+    if (!role.trim() && !priorities.trim() && !upperOkrs.trim() && !skillDev) {
       return '';
     }
 
-    return [
-      'Hãy giúp tôi soạn OKR theo khung FPT (tối đa 3 O, mỗi O 2-4 KR, Align, 6 Rõ, checklist).',
+    const lines = [
+      'Hãy giúp tôi soạn OKR theo khung FPT (tối đa 3 O, mỗi O 2-4 KR, Align, 6 Rõ).',
       role.trim() ? `Vai trò: ${role.trim()}` : '',
       unit.trim() ? `Đơn vị: ${unit.trim()}` : '',
       period.trim() ? `Kỳ: ${period.trim()}` : '',
       priorities.trim() ? `Ưu tiên trong kỳ: ${priorities.trim()}` : '',
       upperOkrs.trim() ? `OKR cấp trên / chiến lược liên quan:\n${upperOkrs.trim()}` : '',
-      'Trả về bản O/KR rõ ràng, đánh dấu số liệu cần xác nhận, và checklist ngắn.',
-    ]
-      .filter(Boolean)
-      .join('\n');
+      'Trả về đúng mẫu form F.OKR (Edit OKR):',
+      '## Objective N',
+      '- Content / Owner / Frequency (Monthly hoặc Quarterly)',
+      '### Key Result N',
+      '- Content / Type of KR (Milestone|Currency|Numeric|Percentage) / Criteria (Higher is better|Lower is better)',
+      '- Start / Target / Unit / Person in charge / Due date (DD-MMM-YYYY)',
+      'Ưu tiên ý tưởng từ ngân hàng ý tưởng; đánh dấu số liệu cần xác nhận; kèm checklist ngắn.',
+    ];
+
+    if (skillDev) {
+      lines.push(
+        'Bật OKR phát triển kỹ năng: thêm tối đa 1 Objective học → ứng dụng (không chỉ hoàn thành khóa học).',
+        skillDevNote.trim()
+          ? `Ghi chú skill-dev: ${skillDevNote.trim()}`
+          : 'Gợi ý mặc định: học một khóa AI/agentic và ship một app nhỏ (RAG/chatbot) để tăng kỹ năng làm việc.',
+      );
+    }
+
+    return lines.filter(Boolean).join('\n');
   }
 
   private persist(): void {

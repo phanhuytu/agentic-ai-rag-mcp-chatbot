@@ -60,8 +60,8 @@ function keywordFallback(chunks: KnowledgeChunk[], query: string): string {
 
   const defaults = [
     'Quy trình coaching để tạo OKR phù hợp',
-    'Cách viết Objective tốt',
-    'Cách viết Key Result tốt',
+    'Mẫu form F.OKR (Edit OKR)',
+    'Ngân hàng ý tưởng OKR (idea bank)',
     'Checklist review bản OKR trước khi nộp',
   ];
   return chunks

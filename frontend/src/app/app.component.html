@@ -41,10 +41,27 @@
         <textarea name="upperOkrs" [(ngModel)]="intake.upperOkrs" rows="4" placeholder="Dán O/KR cấp trên nếu có"></textarea>
       </label>
 
+      <label class="checkbox-row">
+        <input type="checkbox" name="skillDev" [(ngModel)]="intake.skillDev" />
+        Thêm OKR phát triển kỹ năng (học + ứng dụng)
+      </label>
+
+      @if (intake.skillDev) {
+        <label>
+          Ghi chú skill-dev
+          <textarea
+            name="skillDevNote"
+            [(ngModel)]="intake.skillDevNote"
+            rows="3"
+            placeholder="VD: khóa Coursera AI + làm chatbot RAG/MCP"
+          ></textarea>
+        </label>
+      }
+
       <div class="intake-actions">
         <button type="button" class="primary" (click)="generateFromIntake()" [disabled]="isSending">Soạn OKR</button>
         <button type="button" (click)="validateLastOkr()" [disabled]="isSending">Validate bản cuối</button>
-        <button type="button" (click)="exportLastOkr()" [disabled]="isSending">Export .md</button>
+        <button type="button" (click)="exportLastOkr()" [disabled]="isSending">Export .md + .json</button>
         <button type="button" class="ghost" (click)="clearHistory()" [disabled]="isSending">Xóa lịch sử</button>
       </div>
 

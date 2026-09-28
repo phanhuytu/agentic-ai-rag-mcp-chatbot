@@ -18,7 +18,8 @@ Quy chuẩn phổ biến khi đặt OKR cá nhân tại FPT:
 - Tối đa 3 Objectives (O) mỗi kỳ (thường theo quý).
 - Mỗi Objective có từ 2 đến 4 Key Results (KR).
 - Nội dung phải liên quan công việc và Align (hướng tâm) với OKR bộ phận / công ty / cấp trên.
-- KR phải thể hiện kết quả trong công việc, không dừng ở việc học tập thuần túy nếu không tạo ra đầu ra công việc.
+- KR phải thể hiện kết quả trong công việc, không dừng ở việc học tập thuần túy nếu không tạo ra đầu ra.
+- Ngoại lệ skill-dev: khi người dùng chủ động yêu cầu OKR phát triển kỹ năng, được phép tối đa 1 Objective học → ứng dụng (app/demo/playbook), với KR đo được đầu ra áp dụng — không chỉ “hoàn thành khóa học”.
 - Cấp quản lý thường cần OKR quý và có thể cần OKR cả năm theo yêu cầu đơn vị.
 Công thức tổng quát: “Chúng ta sẽ đạt được [Objective], được đo bằng [Key Results]”.
 
@@ -70,6 +71,7 @@ Ví dụ kém:
 - “Hỗ trợ team tốt hơn”.
 - “Đọc 3 chương sách” (nếu không có đầu ra ứng dụng vào công việc).
 - “Tham gia nhiều họp”.
+Khi skill-dev được bật: KR học phải kèm đầu ra (ship app, demo nội bộ, playbook) với Type/Start/Target/Due date rõ trên form F.OKR.
 
 ## Alignment hướng tâm giữa các cấp
 
@@ -113,12 +115,87 @@ Khi người dùng muốn tạo OKR, hãy coach theo thứ tự:
 4. Kiểm tra 5 tiêu chí FPT + 6 Rõ + 6 bẫy.
 5. Chỉ ra Align: mỗi O/KR đóng góp vào mục tiêu nào ở cấp trên.
 6. Đề xuất lịch check-in CFR (ví dụ mỗi tuần 15 phút).
-7. Trả về bản OKR ở định dạng:
-   - O1: ...
-     - KR1: ... (baseline → target, deadline, owner)
-     - KR2: ...
-   - O2: ...
+7. Trả về bản OKR đúng mẫu form F.OKR (Edit OKR), không dùng one-liner O1/KR1 cũ:
+
+```text
+## Objective 1
+- Content: ...
+- Owner: ...
+- Frequency: Monthly | Quarterly
+
+### Key Result 1
+- Content: ...
+- Type of KR: Milestone | Currency | Numeric | Percentage
+- Criteria: Higher is better | Lower is better
+- Start: <number>
+- Target: <number>
+- Unit: ...
+- Person in charge: ...
+- Due date: DD-MMM-YYYY
+```
+
 8. Nếu thiếu thông tin, hỏi thêm thay vì bịa số liệu. Có thể đưa giá trị mẫu kèm ghi chú “cần xác nhận số thực tế”.
+9. Ưu tiên ý tưởng từ “Ngân hàng ý tưởng OKR”; tránh lặp 3 ví dụ Delivery/Sales/HR máy móc.
+
+## Mẫu form F.OKR (Edit OKR)
+
+Khi soạn bản nháp để nhập F.OKR, mỗi Objective và mỗi Key Result phải đủ field như màn hình Edit OKR:
+
+Objective:
+- Content (≤ ~300 ký tự, truyền cảm hứng, không to-do)
+- Owner (người phụ trách Objective)
+- Frequency: thường Monthly hoặc Quarterly (map từ kỳ intake)
+
+Key Result:
+- Content
+- Type of KR: Milestone | Currency | Numeric | Percentage
+- Criteria: Higher is better | Lower is better
+- Start (baseline số)
+- Target (mục tiêu số)
+- Unit (%, VND, count, done, …)
+- Person in charge
+- Due date dạng DD-MMM-YYYY (ví dụ 31-Dec-2026)
+
+Chọn Type:
+- Percentage: tỷ lệ (On-time Delivery %, defect %, completion %)
+- Numeric: số lượng (số feature, số tài liệu, số session)
+- Currency: tiền (doanh thu, tiết kiệm chi phí)
+- Milestone: mốc hoàn thành — Start 0, Target 1 (hoặc 0→100), Unit done hoặc %
+
+Ví dụ điền form (Delivery):
+## Objective 1
+- Content: Đảm bảo tiến độ và chất lượng bàn giao các tính năng Backend trọng điểm Q4.
+- Owner: Phan Huy Tự (TuPH3)
+- Frequency: Monthly
+
+### Key Result 1
+- Content: Đạt tỷ lệ bàn giao tính năng đúng hạn (On-time Delivery) 100% cho tất cả các Sprint trong Q4
+- Type of KR: Percentage
+- Criteria: Higher is better
+- Start: 0
+- Target: 100
+- Unit: %
+- Person in charge: Phan Huy Tự (TuPH3)
+- Due date: 31-Dec-2026
+
+## Ngân hàng ý tưởng OKR (idea bank)
+
+Dùng section này để đề xuất OKR đa dạng, tránh bản nháp nhàm. Chọn ý tưởng phù hợp role/priorities; đánh dấu số liệu cần xác nhận.
+
+Ý tưởng công việc / Align (mặc định):
+1. Delivery quality: giảm defect escape; tăng on-time delivery; 100% post-mortem P1/P2 trong SLA.
+2. Automation / platform: tự động hóa X pipeline kiểm thử; giảm thời gian release thủ công từ A xuống B giờ.
+3. Knowledge sharing: xuất bản N playbook có owner + metric; ≥ Y% team áp dụng checklist mới.
+4. Reliability: giảm MTTR sự cố từ X xuống Y; tăng uptime service trọng điểm.
+5. Stakeholder clarity: 100% change request có impact estimate trước khi commit sprint.
+
+Ý tưởng phát triển kỹ năng / học → ship (chỉ khi user bật skill-dev):
+1. Học một khóa AI/agentic (ví dụ Coursera) và ship một app nhỏ (chatbot RAG/MCP) để thực hành ứng dụng AI — mục tiêu tăng kỹ năng làm việc gián tiếp, không bắt buộc Align doanh thu.
+2. KR mẫu skill-dev:
+   - Milestone: hoàn thành khóa + quiz đạt ngưỡng (Start 0 → Target 1).
+   - Numeric: ship 1 app demo có auth + streaming + RAG.
+   - Percentage: ≥ 80% checklist kỹ năng AI-applied tự đánh giá cuối kỳ.
+3. Không viết KR chỉ “học xong khóa”; luôn có đầu ra ứng dụng đo được.
 
 ## Ví dụ OKR mẫu theo vai trò
 
@@ -142,8 +219,8 @@ Các số X/Y/Z cần thay bằng số liệu thật của đơn vị.
 Trước khi coi là xong, kiểm tra:
 - [ ] ≤ 3 Objectives; mỗi O có 2–4 KR
 - [ ] O truyền cảm hứng, không phải to-do
-- [ ] KR đo được, có baseline / target / deadline
-- [ ] Có Align với OKR cấp trên
+- [ ] KR đo được: Type of KR, Criteria, Start, Target, Unit, Due date, Person in charge
+- [ ] Có Align với OKR cấp trên (trừ khi user chỉ yêu cầu skill-dev thuần)
 - [ ] Có Owner và nguồn lực (6 Rõ)
 - [ ] Không dính 6 bẫy thường gặp
 - [ ] Có kế hoạch CFR / check-in giữa kỳ

@@ -28,12 +28,14 @@ export function validateOkrDraft(draft: string): OkrValidationResult {
     };
   }
 
-  const objectiveMatches = text.match(/(?:^|\n)\s*(?:O\d+|Objective\s*\d+|Mục tiêu\s*\d+)\s*[:.\-]/gi);
+  const objectiveMatches = text.match(
+    /(?:^|\n)\s*(?:#{1,3}\s*)?(?:O\d+|Objective\s*\d+|Mục tiêu\s*\d+)\s*[:.\-]*/gi,
+  );
   const objectiveCount = objectiveMatches?.length ?? 0;
   if (objectiveCount === 0) {
     issues.push({
       code: 'missing_objectives',
-      message: 'Chưa nhận diện được Objective (O1/O2…). Hãy đánh số rõ ràng.',
+      message: 'Chưa nhận diện được Objective (## Objective 1 / O1…). Hãy đánh số rõ ràng.',
     });
   } else if (objectiveCount > 3) {
     issues.push({
@@ -42,12 +44,22 @@ export function validateOkrDraft(draft: string): OkrValidationResult {
     });
   }
 
-  const krMatches = text.match(/(?:^|\n)\s*(?:KR\d+|Key Result\s*\d+|Kết quả then chốt\s*\d+)\s*[:.\-]/gi);
+  const krMatches = text.match(
+    /(?:^|\n)\s*(?:#{1,3}\s*)?(?:KR\d+|Key Result\s*\d+|Kết quả then chốt\s*\d+)\s*[:.\-]*/gi,
+  );
   const krCount = krMatches?.length ?? 0;
   if (krCount === 0) {
     issues.push({
       code: 'missing_krs',
-      message: 'Chưa nhận diện được Key Results (KR1/KR2…).',
+      message: 'Chưa nhận diện được Key Results (### Key Result 1 / KR1…).',
+    });
+  }
+
+  const hasFormFields = /Type of KR\s*:/i.test(text) || /Criteria\s*:/i.test(text);
+  if (krCount > 0 && !hasFormFields && !/(baseline|start\s*:|target\s*:)/i.test(text)) {
+    issues.push({
+      code: 'missing_fokr_fields',
+      message: 'Nên ghi Type of KR, Criteria, Start, Target, Unit theo form F.OKR.',
     });
   }
 
@@ -59,7 +71,10 @@ export function validateOkrDraft(draft: string): OkrValidationResult {
     });
   }
 
-  const mentionsDeadline = /(deadline|hạn|trước|quý|tháng|q[1-4]|\d{1,2}\/\d{1,2})/i.test(text);
+  const mentionsDeadline =
+    /(deadline|due\s*date|hạn|trước|quý|tháng|q[1-4]|\d{1,2}\/\d{1,2}|\d{1,2}-[A-Za-z]{3}-\d{4})/i.test(
+      text,
+    );
   if (!mentionsDeadline) {
     issues.push({
       code: 'missing_deadline',
